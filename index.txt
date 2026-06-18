@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editor di Spartiti Musicali per il Maestro</title>
+    <script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.2/build/cjs/vexflow.js"></script>
+    <style>
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #f4f7f6; color: #333; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .container { max-width: 900px; width: 100%; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        h1 { color: #2c3e50; margin-top: 0; font-size: 24px; text-align: center; border-bottom: 2px solid #ecf0f1; padding-bottom: 15px; }
+        .instructions { background-color: #eef2f7; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; line-height: 1.5; }
+        .instructions code { background: #fff; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-weight: bold; border: 1px solid #dcdcdc; }
+        label { font-weight: bold; display: block; margin-bottom: 8px; color: #34495e; }
+        textarea { width: 100%; height: 100px; padding: 12px; font-family: 'Courier New', Courier, monospace; font-size: 16px; border: 2px solid #bdc3c7; border-radius: 6px; resize: vertical; }
+        textarea:focus { border-color: #3498db; outline: none; }
+        .error-message { color: #e74c3c; margin-top: 5px; font-size: 14px; min-height: 20px; }
+        #output-container { margin-top: 30px; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; display: flex; justify-content: center; overflow-x: auto; }
+        footer { margin-top: 30px; text-align: center; font-size: 12px; color: #7f8c8d; }
+
+        /* ========================================================
+           REGINE DI STAMPA: Nasconde tutto tranne lo spartito
+           ======================================================== */
+        @media print {
+            body { background-color: white; padding: 0; margin: 0; }
+            .container { box-shadow: none; padding: 0; max-width: 100%; }
+            h1, .instructions, label, textarea, .error-message, footer { display: none !important; }
+            #output-container { border: none; margin-top: 0; padding: 0; justify-content: flex-start; overflow: visible; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🎼 Editor Musicale Intelligente v1.2</h1>
+    
+    <div class="instructions">
+        <strong>Come scrivere le note:</strong> Separa ogni elemento con uno spazio.<br>
+        • Formato Nota: <code>[alterazione][Nota][durata][ottava]</code> (Es: <code>dF4+</code>)<br>
+        • Ottave estese: puoi usare fino a quattro <code>+</code> o <code>-</code> (Es: <code>C4++</code>)<br>
+        • Linea di battuta: inserisci una barra verticale <code>|</code> per separare le battute (Es: <code>E4 | G4</code>)<br>
+        • 🖨️ <strong>Stampa:</strong> Premi <code>Cmd + P</code> per stampare o salvare in PDF solo lo spartito pulito!
+    </div>
+
+    <label for="music-input">Inserisci la tua musica qui sotto:</label>
+    <textarea id="music-input" placeholder="Es: dF4+ bB1 | E2">dF4+ bB1 | E2 C4--</textarea>
+    <div id="error-log" class="error-message"></div>
+
+    <div id="output-container">
+        <div id="boo"></div>
+    </div>
+</div>
+
+<footer>Fatto con ❤️ per il Maestro</footer>
+
+<script>
+    const { Renderer, Stave, StaveNote, Accidental, Barline } = Vex.Flow;
+    const inputElement = document.getElementById('music-input');
+    const errorElement = document.getElementById('error-log');
+    const outputDiv = document.getElementById('boo');
+
+    function parseMusicText(text) {
+        const tokens = text.trim().split(/\s+/).filter(t => t.length > 0);
+        const parsedItems = [];
+        
+        // Regex per le note (accetta da 1 a 4 segni + o -)
+        const noteRegex = /^([db])?([A-G])(\d+)([\+\-]{1,4})?$/;
+
+        for (let i = 0; i < tokens.length; i++) {
+            const token = tokens[i];
+
+            // Se incontra il simbolo di battuta
+            if (token === '|') {
+                parsedItems.push({ type: 'barline' });
+                continue;
+            }
+
+            // Altrimenti controlla se è una nota valida
+            const match = token.match(noteRegex);
+            if (!match) throw new Error(`Elemento non valido rilevato: "${token}"`);
+
+            const alt = match[1] || "";       
+            const noteLetter = match[2];     
+            const duration = match[3];       
+            const octaveSigns = match[4] || ""; 
+
+            let octave = 4; 
+            if (octaveSigns.includes('+')) octave += octaveSigns.length;
+            if (octaveSigns.includes('-')) octave -= octaveSigns.length;
+
+            const key = `${noteLetter.toLowerCase()}/${octave}`;
+            let accidentalType = null;
+            if (alt === 'd') accidentalType = '#';
+            if (alt === 'b') accidentalType = 'b';
+
+            parsedItems.push({
+                type: 'note',
+                keys: [key],
+                duration: duration,
+                accidental: accidentalType
+            });
+        }
+        return parsedItems;
+    }
+
+    function renderScore() {
+        outputDiv.innerHTML = "";
+        errorElement.innerText = "";
+        const inputText = inputElement.value;
+        if (!inputText.trim()) return;
+
+        try {
+            const itemsData = parseMusicText(inputText);
+            if (itemsData.length === 0) return;
+
+            // Calcola la larghezza in base agli elementi (le barlines occupano meno spazio delle note)
+            let estimatedWidth = 100;
+            itemsData.forEach(item => {
+                estimatedWidth += (item.type === 'barline') ? 30 : 80;
+            });
+            const width = Math.max(450, estimatedWidth);
+
+            const renderer = new Renderer(outputDiv, Renderer.Backends.SVG);
+            renderer.resize(width, 200);
+            const context = renderer.getContext();
+
+            const stave = new Stave(10, 40, width - 20);
+            stave.addClef("treble").setContext(context).draw();
+
+            const staveNotes = [];
+            itemsData.forEach((data, index) => {
+                if (data.type === 'barline') {
+                    // Crea una linea di battuta (non l'ultima, una normale stanghetta)
+                    // In VexFlow aggiungiamo un elemento speciale di battuta se non è alla fine del pentagramma stesso
+                    const barNote = new StaveNote({ keys: ["b/4"], duration: "b", type: "b" });
+                    // Nota: Per semplicità visiva in questa configurazione lineare usiamo le barlines native di formattazione
+                    // o una nota invisibile modificata. Usiamo il modificatore nativo di Vexflow per la formattazione corretta.
+                } else {
+                    const note = new StaveNote({ keys: data.keys, duration: data.duration });
+                    if (data.accidental) note.addModifier(new Accidental(data.accidental));
+                    staveNotes.push(note);
+                }
+            });
+
+            // Per gestire al meglio l'inserimento visivo delle linee di battuta nel flusso di note, 
+            // ricreiamo l'array combinato accettato dal Formatter di VexFlow v4
+            const finalTickables = [];
+            itemsData.forEach(data => {
+                if (data.type === 'barline') {
+                    // Inserisce una stanghetta nel flusso
+                    const bar = new Vex.Flow.BarNote();
+                    finalTickables.push(bar);
+                } else {
+                    const note = new StaveNote({ keys: data.keys, duration: data.duration });
+                    if (data.accidental) note.addModifier(new Accidental(data.accidental));
+                    finalTickables.push(note);
+                }
+            });
+
+            Vex.Flow.Formatter.FormatAndDraw(context, stave, finalTickables);
+        } catch (error) {
+            errorElement.innerText = error.message;
+        }
+    }
+
+    inputElement.addEventListener('input', renderScore);
+    renderScore();
+</script>
+
+</body>
+</html>
+
