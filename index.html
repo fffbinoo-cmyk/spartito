@@ -17,14 +17,19 @@
         textarea:focus { border-color: #3498db; outline: none; }
         .error-message { color: #e74c3c; margin-top: 5px; font-size: 14px; min-height: 20px; }
         
-        #output-container { margin-top: 30px; background: #fff; padding: 10px; display: flex; flex-direction: column; align-items: center; width: 100%; }
+        /* Controlli di Layout */
+        .layout-controls { margin-top: 20px; display: flex; gap: 10px; align-items: center; }
+        .btn { background-color: #ecf0f1; border: 2px solid #bdc3c7; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; color: #7f8c8d; transition: all 0.2s; }
+        .btn.active { background-color: #3498db; border-color: #2980b9; color: white; }
+        
+        #output-container { margin-top: 20px; background: #fff; padding: 10px; display: flex; flex-direction: column; align-items: center; width: 100%; }
         .system-row { margin-bottom: 20px; width: 740px; }
         footer { margin-top: 30px; text-align: center; font-size: 12px; color: #7f8c8d; }
 
         @media print {
             body { background-color: white; padding: 0; margin: 0; }
             .container { box-shadow: none; padding: 0; max-width: 100%; }
-            h1, .instructions, label, textarea, .error-message, footer { display: none !important; }
+            h1, .instructions, label, textarea, .error-message, .layout-controls, footer { display: none !important; }
             #output-container { border: none; margin-top: 0; padding: 0; }
             .system-row { page-break-inside: avoid; }
         }
@@ -33,18 +38,24 @@
 <body>
 
 <div class="container">
-    <h1>🎼 Editor Musicale Intelligente v2.1 (A4 Corretto)</h1>
+    <h1>🎼 Editor Musicale Intelligente v2.2</h1>
     
     <div class="instructions">
         <strong>Scrittura rapida per il Doc:</strong> Separa note e battute con uno spazio.<br>
         • Nota: <code>[alterazione][Nota][durata][ottava]</code> (Es: <code>dF4+</code>)<br>
-        • Battuta: usa il simbolo <code>|</code> per separare i blocchi. Va a capo automaticamente!<br>
-        • 🖨️ <strong>Stampa:</strong> Premi <code>Cmd + P</code> per stampare o salvare in PDF.
+        • Battuta: usa il simbolo <code>|</code> per separare i blocchi.<br>
+        • 🖨️ <strong>Stampa:</strong> Premi <code>Cmd + P</code> per stampare o salvare in PDF solo lo spartito.
     </div>
 
     <label for="music-input">Inserisci la tua musica qui sotto:</label>
-    <textarea id="music-input" placeholder="Es: C4 D4 E4 F4 | G4 A4 B4">C4 D4 E4 F4 | dF4+ bB1 | E2 C4-- | G4 A4 B4 C4+</textarea>
+    <textarea id="music-input" placeholder="Es: C4 D4 E4 F4 | G4 A4 B4">C4 D4 E4 F4 | dF4+ bB1 | E2 C4-- | G4 A4 B4 C4+ | dF4+ E2 | C4 D4 E4 F4</textarea>
     <div id="error-log" class="error-message"></div>
+
+    <div class="layout-controls">
+        <span><strong>Opzioni Rigo:</strong></span>
+        <button id="btn-auto" class="btn active" onclick="setLayoutMode('auto')">Layout Automatico</button>
+        <button id="btn-fixed" class="btn" onclick="setLayoutMode('fixed')">Fisso (4 battute per rigo)</button>
+    </div>
 
     <div id="output-container"></div>
 </div>
@@ -59,9 +70,17 @@
 
     const MAX_ROW_WIDTH = 740; 
     const STAVE_START_X = 10;
+    
+    let currentLayoutMode = 'auto'; // 'auto' oppure 'fixed'
+
+    function setLayoutMode(mode) {
+        currentLayoutMode = mode;
+        document.getElementById('btn-auto').classList.toggle('active', mode === 'auto');
+        document.getElementById('btn-fixed').classList.toggle('active', mode === 'fixed');
+        renderScore();
+    }
 
     function parseMusicText(text) {
-        // Separiamo per spazi, ma puliamo eventuali spazi multipli attorno alle barre verticali
         const tokens = text.trim().split(/\s+/).filter(t => t.length > 0);
         const measures = [];
         let currentMeasure = [];
@@ -103,7 +122,6 @@
             });
         }
         
-        // Aggiunge l'ultima battuta se rimangono note appese senza il carattere "|" finale
         if (currentMeasure.length > 0) {
             measures.push(currentMeasure);
         }
@@ -122,26 +140,37 @@
             if (measuresData.length === 0) return;
             
             const rows = [];
-            let currentConfiguration = [];
-            let currentWidthAcc = 60; 
-
-            measuresData.forEach((measure) => {
-                let measureWidth = 40;
-                measure.forEach(() => { measureWidth += 75; });
-
-                if (currentWidthAcc + measureWidth > MAX_ROW_WIDTH && currentConfiguration.length > 0) {
-                    rows.push({ measures: currentConfiguration });
-                    currentConfiguration = [measure];
-                    currentWidthAcc = 60 + measureWidth; 
-                } else {
-                    currentConfiguration.push(measure);
-                    currentWidthAcc += measureWidth;
+            
+            if (currentLayoutMode === 'fixed') {
+                // MODALITÀ FISSA: Esattamente 4 battute per rigo
+                for (let i = 0; i < measuresData.length; i += 4) {
+                    const chunk = measuresData.slice(i, i + 4);
+                    rows.push({ measures: chunk });
                 }
-            });
-            if (currentConfiguration.length > 0) {
-                rows.push({ measures: currentConfiguration });
+            } else {
+                // MODALITÀ AUTOMATICA: Calcolo dinamico dello spazio
+                let currentConfiguration = [];
+                let currentWidthAcc = 60; 
+
+                measuresData.forEach((measure) => {
+                    let measureWidth = 40;
+                    measure.forEach(() => { measureWidth += 75; });
+
+                    if (currentWidthAcc + measureWidth > MAX_ROW_WIDTH && currentConfiguration.length > 0) {
+                        rows.push({ measures: currentConfiguration });
+                        currentConfiguration = [measure];
+                        currentWidthAcc = 60 + measureWidth; 
+                    } else {
+                        currentConfiguration.push(measure);
+                        currentWidthAcc += measureWidth;
+                    }
+                });
+                if (currentConfiguration.length > 0) {
+                    rows.push({ measures: currentConfiguration });
+                }
             }
 
+            // Disegno dello spartito
             rows.forEach((rowData) => {
                 const rowDiv = document.createElement('div');
                 rowDiv.className = 'system-row';
@@ -152,7 +181,9 @@
                 const context = renderer.getContext();
 
                 const numMeasuresInRow = rowData.measures.length;
-                const singleStaveWidth = (MAX_ROW_WIDTH - 20) / numMeasuresInRow;
+                // Nel caso fisso a 4 battute, se l'ultimo rigo ha meno di 4 battute, manteniamo la proporzione visiva come se ce ne fossero 4
+                const divisor = (currentLayoutMode === 'fixed') ? 4 : numMeasuresInRow;
+                const singleStaveWidth = (MAX_ROW_WIDTH - 20) / divisor;
 
                 let currentX = STAVE_START_X;
 
