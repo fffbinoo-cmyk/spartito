@@ -19,9 +19,7 @@
         #output-container { margin-top: 30px; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; display: flex; justify-content: center; overflow-x: auto; }
         footer { margin-top: 30px; text-align: center; font-size: 12px; color: #7f8c8d; }
 
-        /* ========================================================
-           REGINE DI STAMPA: Nasconde tutto tranne lo spartito
-           ======================================================== */
+        /* REGISTRO DI STAMPA: Nasconde tutto tranne lo spartito */
         @media print {
             body { background-color: white; padding: 0; margin: 0; }
             .container { box-shadow: none; padding: 0; max-width: 100%; }
@@ -55,7 +53,7 @@
 <footer>Fatto con ❤️ per il Maestro</footer>
 
 <script>
-    const { Renderer, Stave, StaveNote, Accidental, Barline } = Vex.Flow;
+    const { Renderer, Stave, StaveNote, Accidental, BarNote } = Vex.Flow;
     const inputElement = document.getElementById('music-input');
     const errorElement = document.getElementById('error-log');
     const outputDiv = document.getElementById('boo');
@@ -63,22 +61,18 @@
     function parseMusicText(text) {
         const tokens = text.trim().split(/\s+/).filter(t => t.length > 0);
         const parsedItems = [];
-        
-        // Regex per le note (accetta da 1 a 4 segni + o -)
         const noteRegex = /^([db])?([A-G])(\d+)([\+\-]{1,4})?$/;
 
         for (let i = 0; i < tokens.length; i++) {
             const token = tokens[i];
 
-            // Se incontra il simbolo di battuta
             if (token === '|') {
                 parsedItems.push({ type: 'barline' });
                 continue;
             }
 
-            // Altrimenti controlla se è una nota valida
             const match = token.match(noteRegex);
-            if (!match) throw new Error(`Elemento non valido rilevato: "${token}"`);
+            if (!match) throw new Error(`Elemento non valido: "${token}"`);
 
             const alt = match[1] || "";       
             const noteLetter = match[2];     
@@ -114,10 +108,9 @@
             const itemsData = parseMusicText(inputText);
             if (itemsData.length === 0) return;
 
-            // Calcola la larghezza in base agli elementi (le barlines occupano meno spazio delle note)
             let estimatedWidth = 100;
             itemsData.forEach(item => {
-                estimatedWidth += (item.type === 'barline') ? 30 : 80;
+                estimatedWidth += (item.type === 'barline') ? 40 : 80;
             });
             const width = Math.max(450, estimatedWidth);
 
@@ -128,29 +121,10 @@
             const stave = new Stave(10, 40, width - 20);
             stave.addClef("treble").setContext(context).draw();
 
-            const staveNotes = [];
-            itemsData.forEach((data, index) => {
-                if (data.type === 'barline') {
-                    // Crea una linea di battuta (non l'ultima, una normale stanghetta)
-                    // In VexFlow aggiungiamo un elemento speciale di battuta se non è alla fine del pentagramma stesso
-                    const barNote = new StaveNote({ keys: ["b/4"], duration: "b", type: "b" });
-                    // Nota: Per semplicità visiva in questa configurazione lineare usiamo le barlines native di formattazione
-                    // o una nota invisibile modificata. Usiamo il modificatore nativo di Vexflow per la formattazione corretta.
-                } else {
-                    const note = new StaveNote({ keys: data.keys, duration: data.duration });
-                    if (data.accidental) note.addModifier(new Accidental(data.accidental));
-                    staveNotes.push(note);
-                }
-            });
-
-            // Per gestire al meglio l'inserimento visivo delle linee di battuta nel flusso di note, 
-            // ricreiamo l'array combinato accettato dal Formatter di VexFlow v4
             const finalTickables = [];
             itemsData.forEach(data => {
                 if (data.type === 'barline') {
-                    // Inserisce una stanghetta nel flusso
-                    const bar = new Vex.Flow.BarNote();
-                    finalTickables.push(bar);
+                    finalTickables.push(new BarNote());
                 } else {
                     const note = new StaveNote({ keys: data.keys, duration: data.duration });
                     if (data.accidental) note.addModifier(new Accidental(data.accidental));
@@ -170,4 +144,3 @@
 
 </body>
 </html>
-
