@@ -25,7 +25,6 @@
         .system-row { margin-bottom: 40px; width: 740px; }
         footer { margin-top: 30px; text-align: center; font-size: 12px; color: #7f8c8d; }
 
-        /* REGISTRO DI STAMPA */
         @media print {
             body { background-color: white; padding: 0; margin: 0; }
             .container { box-shadow: none; padding: 0; max-width: 100%; }
@@ -38,13 +37,13 @@
 <body>
 
 <div class="container">
-    <h1>🎼 Editor Musicale Intelligente v2.5</h1>
+    <h1>🎼 Editor Musicale Intelligente v3.0 (Unione Note Automatizzata)</h1>
     
     <div class="instructions">
         <strong>Scrittura rapida per il Doc:</strong> Separa note e battute con uno spazio.<br>
         • Nota: <code>[alterazione][Nota][durata][ottava]</code> (Es: <code>dF4+</code>)<br>
-        • Battuta: usa il simbolo <code>|</code> per separare i blocchi.<br>
-        • 🖨️ <strong>Stampa:</strong> Premi <code>Cmd + P</code> per stampare o salvare in PDF solo lo spartito pulito.
+        • Battuta: usa il simbolo <code>|</code> per separare i blocchi. Le note veloci si <strong>uniscono da sole!</strong><br>
+        • 🖨️ <strong>Stampa:</strong> Premi <code>Cmd + P</code> per stampare o salvare in PDF lo spartito pulito.
     </div>
 
     <label for="music-input">Inserisci la tua musica qui sotto:</label>
@@ -63,7 +62,7 @@
 <footer>Fatto con ❤️ per il Maestro</footer>
 
 <script>
-    const { Renderer, Stave, StaveNote, Accidental } = Vex.Flow;
+    const { Renderer, Stave, StaveNote, Accidental, Beam } = Vex.Flow;
     const inputElement = document.getElementById('music-input');
     const errorElement = document.getElementById('error-log');
     const outputDiv = document.getElementById('output-container');
@@ -200,7 +199,16 @@
                     });
 
                     if (vexNotes.length > 0) {
+                        // FORMATTA LE NOTE DENTRO LA BATTUTA
                         Vex.Flow.Formatter.FormatAndDraw(context, stave, vexNotes);
+                        
+                        // GENERA AUTOMATICAMENTE LE TRATTE D'UNIONE (BEAMS) PER LE NOTE VELOCI COINVOLTE
+                        try {
+                            const beams = Beam.generateBeams(vexNotes);
+                            beams.forEach(b => b.setContext(context).draw());
+                        } catch(e) {
+                            // Ignora silenziosamente errori se il ritmo inserito è incompleto o strano
+                        }
                     }
 
                     currentX += singleStaveWidth;
