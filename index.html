@@ -22,7 +22,8 @@
         .btn.active { background-color: #3498db; border-color: #2980b9; color: white; }
         
         #output-container { margin-top: 20px; background: #fff; padding: 10px; display: flex; flex-direction: column; align-items: center; width: 100%; }
-        .system-row { margin-bottom: 40px; width: 740px; }
+        /* Spazio tra i righi ridotto per ottimizzare la stampa */
+        .system-row { margin-bottom: 15px; width: 740px; }
         footer { margin-top: 30px; text-align: center; font-size: 12px; color: #7f8c8d; }
 
         @media print {
@@ -30,24 +31,25 @@
             .container { box-shadow: none; padding: 0; max-width: 100%; }
             h1, .instructions, label, textarea, .error-message, .layout-controls, footer { display: none !important; }
             #output-container { border: none; margin-top: 0; padding: 0; }
-            .system-row { page-break-inside: avoid; margin-bottom: 50px; }
+            .system-row { page-break-inside: avoid; margin-bottom: 25px; }
         }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>🎼 Editor Musicale Intelligente v3.1</h1>
+    <h1>🎼 Editor Musicale Intelligente v3.5 (Stampa Compatta)</h1>
     
     <div class="instructions">
         <strong>Scrittura rapida per il Doc:</strong> Separa note e battute con uno spazio.<br>
         • Nota: <code>[alterazione][Nota][durata][ottava]</code> (Es: <code>dF4+</code>)<br>
-        • Battuta: usa il simbolo <code>|</code> per separare i blocchi. Le note veloci si uniscono automaticamente senza imperfezioni visive.<br>
-        • 🖨️ <strong>Stampa:</strong> Premi <code>Cmd + P</code> per stampare o salvare in PDF lo spartito pulito.
+        • Limite Ottave: massimo 3 segni più o meno (Es: <code>A4+++</code> o <code>A4---</code>)<br>
+        • Battuta: usa il simbolo <code>|</code> per separare i blocchi. Le note veloci si uniscono da sole.<br>
+        • 🖨️ <strong>Stampa:</strong> Premi <code>Cmd + P</code> per stampare o salvare in PDF lo spartito super compatto.
     </div>
 
     <label for="music-input">Inserisci la tua musica qui sotto:</label>
-    <textarea id="music-input" placeholder="Es: C4 D4 E4 F4 | G4 A4 B4">C4 bE4 dG4 B4 | C4++ dF4++ G4- A3-- | E1 | dC8 D8 E8 F8 bB4 dF4+ | C4++ G2-- bB4+ | F4+ F4- F4++ F4-- | dG1+ | C4 D4 E4 F4</textarea>
+    <textarea id="music-input" placeholder="Es: C4 D4 E4 F4 | G4 A4 B4">C4 bE4 dG4 B4 | C4++ dF4++ G4- A3-- | E1 | dC8 D8 E8 F8 bB4 dF4+ | C4+++ G2-- bB4+ | F4+ F4- F4++ F4-- | dG1+ | C4 D4 E4 F4</textarea>
     <div id="error-log" class="error-message"></div>
 
     <div class="layout-controls">
@@ -84,7 +86,8 @@
         const measures = [];
         let currentMeasure = [];
         
-        const noteRegex = /^([db])?([A-G])(\d+)([\+\-]{1,4})?$/;
+        // Modificata l'espressione regolare {1,3} per accettare massimo 3 segni + o -
+        const noteRegex = /^([db])?([A-G])(\d+)([\+\-]{1,3})?$/;
 
         for (let i = 0; i < tokens.length; i++) {
             const token = tokens[i];
@@ -98,7 +101,7 @@
             }
 
             const match = token.match(noteRegex);
-            if (!match) throw new Error(`Elemento non valido: "${token}"`);
+            if (!match) throw new Error(`Elemento non valido o limite ottave superato (max 3): "${token}"`);
 
             const alt = match[1] || "";       
             const noteLetter = match[2];     
@@ -173,7 +176,8 @@
                 outputDiv.appendChild(rowDiv);
 
                 const renderer = new Renderer(rowDiv, Renderer.Backends.SVG);
-                renderer.resize(MAX_ROW_WIDTH, 190);
+                // ALTEZZA RIDOTTA A 130 PER COMPATTARE LO SPARTITO
+                renderer.resize(MAX_ROW_WIDTH, 130);
                 const context = renderer.getContext();
 
                 const numMeasuresInRow = rowData.measures.length;
@@ -183,7 +187,8 @@
                 let currentX = STAVE_START_X;
 
                 rowData.measures.forEach((measureNotes, index) => {
-                    const stave = new Stave(currentX, 50, singleStaveWidth);
+                    // Posizionamento verticale ottimizzato a 35 per stare al centro dei 130px totali
+                    const stave = new Stave(currentX, 35, singleStaveWidth);
                     
                     if (index === 0) {
                         stave.addClef("treble");
@@ -199,16 +204,12 @@
                     });
 
                     if (vexNotes.length > 0) {
-                        // Genera i gruppi uniti prima del disegno definitivo
                         let beams = [];
                         try {
                             beams = Beam.generateBeams(vexNotes);
                         } catch(e) {}
 
-                        // Disegna e formatta le note
                         Vex.Flow.Formatter.FormatAndDraw(context, stave, vexNotes);
-                        
-                        // Disegna le barre di unione pulite (senza sovrapposizioni o doppie codine)
                         beams.forEach(b => b.setContext(context).draw());
                     }
 
