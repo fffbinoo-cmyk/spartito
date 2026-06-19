@@ -37,12 +37,12 @@
 <body>
 
 <div class="container">
-    <h1>🎼 Editor Musicale Intelligente v3.0 (Unione Note Automatizzata)</h1>
+    <h1>🎼 Editor Musicale Intelligente v3.1</h1>
     
     <div class="instructions">
         <strong>Scrittura rapida per il Doc:</strong> Separa note e battute con uno spazio.<br>
         • Nota: <code>[alterazione][Nota][durata][ottava]</code> (Es: <code>dF4+</code>)<br>
-        • Battuta: usa il simbolo <code>|</code> per separare i blocchi. Le note veloci si <strong>uniscono da sole!</strong><br>
+        • Battuta: usa il simbolo <code>|</code> per separare i blocchi. Le note veloci si uniscono automaticamente senza imperfezioni visive.<br>
         • 🖨️ <strong>Stampa:</strong> Premi <code>Cmd + P</code> per stampare o salvare in PDF lo spartito pulito.
     </div>
 
@@ -199,16 +199,17 @@
                     });
 
                     if (vexNotes.length > 0) {
-                        // FORMATTA LE NOTE DENTRO LA BATTUTA
+                        // Genera i gruppi uniti prima del disegno definitivo
+                        let beams = [];
+                        try {
+                            beams = Beam.generateBeams(vexNotes);
+                        } catch(e) {}
+
+                        // Disegna e formatta le note
                         Vex.Flow.Formatter.FormatAndDraw(context, stave, vexNotes);
                         
-                        // GENERA AUTOMATICAMENTE LE TRATTE D'UNIONE (BEAMS) PER LE NOTE VELOCI COINVOLTE
-                        try {
-                            const beams = Beam.generateBeams(vexNotes);
-                            beams.forEach(b => b.setContext(context).draw());
-                        } catch(e) {
-                            // Ignora silenziosamente errori se il ritmo inserito è incompleto o strano
-                        }
+                        // Disegna le barre di unione pulite (senza sovrapposizioni o doppie codine)
+                        beams.forEach(b => b.setContext(context).draw());
                     }
 
                     currentX += singleStaveWidth;
