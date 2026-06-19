@@ -22,7 +22,6 @@
         .btn.active { background-color: #3498db; border-color: #2980b9; color: white; }
         
         #output-container { margin-top: 20px; background: #fff; padding: 10px; display: flex; flex-direction: column; align-items: center; width: 100%; }
-        /* Spazio tra i righi ridotto per ottimizzare la stampa */
         .system-row { margin-bottom: 15px; width: 740px; }
         footer { margin-top: 30px; text-align: center; font-size: 12px; color: #7f8c8d; }
 
@@ -38,18 +37,18 @@
 <body>
 
 <div class="container">
-    <h1>🎼 Editor Musicale Intelligente v3.5 (Stampa Compatta)</h1>
+    <h1>🎼 Editor Musicale Intelligente v4.0</h1>
     
     <div class="instructions">
-        <strong>Scrittura rapida per il Doc:</strong> Separa note e battute con uno spazio.<br>
-        • Nota: <code>[alterazione][Nota][durata][ottava]</code> (Es: <code>dF4+</code>)<br>
-        • Limite Ottave: massimo 3 segni più o meno (Es: <code>A4+++</code> o <code>A4---</code>)<br>
-        • Battuta: usa il simbolo <code>|</code> per separare i blocchi. Le note veloci si uniscono da sole.<br>
-        • 🖨️ <strong>Stampa:</strong> Premi <code>Cmd + P</code> per stampare o salvare in PDF lo spartito super compatto.
+        <strong>Scrittura rapida per il Doc:</strong> Separa gli elementi con uno spazio.<br>
+        • <strong>Note:</strong> <code>[alterazione][Nota][durata][.][ottava]</code> (Es: <code>C4</code>, con punto: <code>C4.</code>)<br>
+        • <strong>Pause:</strong> <code>[durata]r[.]</code> (Es: <code>4r</code> = pausa da un quarto, <code>2r.</code> = pausa da metà col punto)<br>
+        • <strong>Limiti:</strong> Massimo 3 segni ottava (<code>+++</code> / <code>---</code>). Unione note veloci automatica.<br>
+        • 🖨️ <strong>Stampa:</strong> Premi <code>Cmd + P</code> per stampare o salvare in PDF.
     </div>
 
     <label for="music-input">Inserisci la tua musica qui sotto:</label>
-    <textarea id="music-input" placeholder="Es: C4 D4 E4 F4 | G4 A4 B4">C4 bE4 dG4 B4 | C4++ dF4++ G4- A3-- | E1 | dC8 D8 E8 F8 bB4 dF4+ | C4+++ G2-- bB4+ | F4+ F4- F4++ F4-- | dG1+ | C4 D4 E4 F4</textarea>
+    <textarea id="music-input" placeholder="Es: C4 D4 E4 F4 | G4 A4 B4">C4. D8 E4 4r | dC8 D8 E8 F8 bB4 4r | C4++ 2r. | C4 D4 4r. F8</textarea>
     <div id="error-log" class="error-message"></div>
 
     <div class="layout-controls">
@@ -64,7 +63,7 @@
 <footer>Fatto con ❤️ per il Maestro</footer>
 
 <script>
-    const { Renderer, Stave, StaveNote, Accidental, Beam } = Vex.Flow;
+    const { Renderer, Stave, StaveNote, Accidental, Beam, Dot } = Vex.Flow;
     const inputElement = document.getElementById('music-input');
     const errorElement = document.getElementById('error-log');
     const outputDiv = document.getElementById('output-container');
@@ -86,8 +85,8 @@
         const measures = [];
         let currentMeasure = [];
         
-        // Modificata l'espressione regolare {1,3} per accettare massimo 3 segni + o -
-        const noteRegex = /^([db])?([A-G])(\d+)([\+\-]{1,3})?$/;
+        // Regex aggiornata per supportare il punto (.) sia su note che su pause
+        const elementRegex = /^(([db])?([A-G])(\d+)(\.?)(([\+\-]{1,3})?))|((16|2|4|8|1)(r)(\.?))$/;
 
         for (let i = 0; i < tokens.length; i++) {
             const token = tokens[i];
@@ -100,28 +99,45 @@
                 continue;
             }
 
-            const match = token.match(noteRegex);
-            if (!match) throw new Error(`Elemento non valido o limite ottave superato (max 3): "${token}"`);
+            const match = token.match(elementRegex);
+            if (!match) throw new Error(`Elemento non valido o limite superato: "${token}"`);
 
-            const alt = match[1] || "";       
-            const noteLetter = match[2];     
-            const duration = match[3];       
-            const octaveSigns = match[4] || ""; 
+            if (match[10] === 'r') {
+                // Gestione PAUSA
+                const duration = match[9];
+                const hasDot = match[11] === '.';
+                
+                currentMeasure.push({
+                    isRest: true,
+                    keys: ["b/4"], // Vexflow mette le pause standard sulla linea centrale
+                    duration: duration + "r",
+                    hasDot: hasDot
+                });
+            } else {
+                // Gestione NOTA
+                const alt = match[2] || "";       
+                const noteLetter = match[3];     
+                const duration = match[4];       
+                const hasDot = match[5] === '.';
+                const octaveSigns = match[6] || ""; 
 
-            let octave = 4; 
-            if (octaveSigns.includes('+')) octave += octaveSigns.length;
-            if (octaveSigns.includes('-')) octave -= octaveSigns.length;
+                let octave = 4; 
+                if (octaveSigns.includes('+')) octave += octaveSigns.length;
+                if (octaveSigns.includes('-')) octave -= octaveSigns.length;
 
-            const key = `${noteLetter.toLowerCase()}/${octave}`;
-            let accidentalType = null;
-            if (alt === 'd') accidentalType = '#';
-            if (alt === 'b') accidentalType = 'b';
+                const key = `${noteLetter.toLowerCase()}/${octave}`;
+                let accidentalType = null;
+                if (alt === 'd') accidentalType = '#';
+                if (alt === 'b') accidentalType = 'b';
 
-            currentMeasure.push({
-                keys: [key],
-                duration: duration,
-                accidental: accidentalType
-            });
+                currentMeasure.push({
+                    isRest: false,
+                    keys: [key],
+                    duration: duration,
+                    accidental: accidentalType,
+                    hasDot: hasDot
+                });
+            }
         }
         
         if (currentMeasure.length > 0) {
@@ -176,7 +192,6 @@
                 outputDiv.appendChild(rowDiv);
 
                 const renderer = new Renderer(rowDiv, Renderer.Backends.SVG);
-                // ALTEZZA RIDOTTA A 130 PER COMPATTARE LO SPARTITO
                 renderer.resize(MAX_ROW_WIDTH, 130);
                 const context = renderer.getContext();
 
@@ -187,7 +202,6 @@
                 let currentX = STAVE_START_X;
 
                 rowData.measures.forEach((measureNotes, index) => {
-                    // Posizionamento verticale ottimizzato a 35 per stare al centro dei 130px totali
                     const stave = new Stave(currentX, 35, singleStaveWidth);
                     
                     if (index === 0) {
@@ -199,14 +213,24 @@
                     const vexNotes = [];
                     measureNotes.forEach(data => {
                         const note = new StaveNote({ keys: data.keys, duration: data.duration });
-                        if (data.accidental) note.addModifier(new Accidental(data.accidental));
+                        
+                        if (data.accidental) {
+                            note.addModifier(new Accidental(data.accidental));
+                        }
+                        if (data.hasDot) {
+                            Dot.buildAndAttach([note], { all: true });
+                        }
+                        
                         vexNotes.push(note);
                     });
 
                     if (vexNotes.length > 0) {
                         let beams = [];
                         try {
-                            beams = Beam.generateBeams(vexNotes);
+                            // Genera le barre d'unione escludendo le pause dal raggruppamento ritmico grafico
+                            beams = Beam.generateBeams(vexNotes, {
+                                filter_rests: true
+                            });
                         } catch(e) {}
 
                         Vex.Flow.Formatter.FormatAndDraw(context, stave, vexNotes);
