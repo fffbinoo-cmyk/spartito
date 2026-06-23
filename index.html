@@ -38,7 +38,7 @@
 <body>
 
 <div class="container">
-    <h1>🎼 Editor Musicale Intelligente v5.2</h1>
+    <h1>🎼 Editor Musicale Intelligente v5.3</h1>
     
     <div class="instructions">
         <strong>PONTUARIO DI SCRITTURA RAPIDA (Separa ogni elemento con uno spazio):</strong>
@@ -48,7 +48,7 @@
             ↕️ <strong>Altezza/Ottave:</strong> Aggiungi da 1 a 3 segni più o meno alla fine. Es: <code>C4+++</code> (Acutissimo), <code>G2--</code> (Gravissimo).<br>
             • <strong>Punto di Valore:</strong> Metti un punto dopo la durata. Es: <code>C4.</code> (Nota col punto), <code>4r.</code> (Pausa col punto).<br>
             🤫 <strong>Pause:</strong> Durata + lettera 'r'. Es: <code>1r</code> (Intera), <code>2r</code> (Metà), <code>4r</code> (Quarto), <code>8r</code> (Ottavo), <code>16r</code>.<br>
-            🔗 <strong>Legature e Sbarre:</strong> <code>( A4 B4 )</code> per linea curva (anche tra battute <code>|</code>). <code>[ E8 F8 ]</code> per sbarre manuali.
+            🔗 <strong>Legature e Sbarre:</strong> <code>( A4 B4 )</code> per linea curva (anche tra battute <code>|</code>). <code>[ E8 F8 ]</code> per sbarre manuale pulite.
         </div>
     </div>
 
@@ -254,15 +254,18 @@
                         if (data.accidental) note.addModifier(new Accidental(data.accidental));
                         if (data.hasDot) Dot.buildAndAttach([note], { all: true });
                         
-                        vexNotes.push(note);
-                        globalNoteMap[data.globalIndex] = note;
-
+                        // IDENTIFICAZIONE INTEGRATA: Se la nota appartiene a un gruppo beam manuale, distruggiamo la funzione drawFlag
                         parsedData.beamGroupsToCreate.forEach((group, gIdx) => {
                             if (group.includes(data.globalIndex)) {
                                 if (!localBeamGroups[gIdx]) localBeamGroups[gIdx] = [];
                                 localBeamGroups[gIdx].push(note);
+                                // Patch di basso livello: inibisce il rendering grafico della codina singola
+                                note.drawFlag = function() {}; 
                             }
                         });
+
+                        vexNotes.push(note);
+                        globalNoteMap[data.globalIndex] = note;
                     });
 
                     if (vexNotes.length > 0) {
@@ -271,7 +274,6 @@
                         if (parsedData.beamGroupsToCreate.length > 0) {
                             localBeamGroups.forEach(notesGroup => {
                                 if (notesGroup && notesGroup.length > 1) {
-                                    notesGroup.forEach(n => { if(n.render_options) n.render_options.draw_stem_through_stave = false; });
                                     const b = new Beam(notesGroup);
                                     b.setContext(context).draw();
                                 }
