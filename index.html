@@ -10,8 +10,9 @@
         body { background-color: #f4f7f6; color: #333; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
         .container { max-width: 850px; width: 100%; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
         h1 { color: #2c3e50; margin-top: 0; font-size: 24px; text-align: center; border-bottom: 2px solid #ecf0f1; padding-bottom: 15px; }
-        .instructions { background-color: #eef2f7; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; line-height: 1.5; }
+        .instructions { background-color: #eef2f7; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; line-height: 1.6; }
         .instructions code { background: #fff; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-weight: bold; border: 1px solid #dcdcdc; }
+        .ins-section { margin-top: 5px; margin-bottom: 5px; padding-left: 10px; border-left: 3px solid #3498db; }
         label { font-weight: bold; display: block; margin-bottom: 8px; color: #34495e; }
         textarea { width: 100%; height: 140px; padding: 12px; font-family: 'Courier New', Courier, monospace; font-size: 16px; border: 2px solid #bdc3c7; border-radius: 6px; resize: vertical; }
         textarea:focus { border-color: #3498db; outline: none; }
@@ -22,7 +23,6 @@
         .btn.active { background-color: #3498db; border-color: #2980b9; color: white; }
         
         #output-container { margin-top: 20px; background: #fff; padding: 10px; display: flex; flex-direction: column; align-items: center; width: 100%; }
-        /* Altezza rigo bilanciata per note gravi e compattezza */
         .system-row { margin-bottom: 20px; width: 740px; }
         footer { margin-top: 30px; text-align: center; font-size: 12px; color: #7f8c8d; }
 
@@ -38,13 +38,18 @@
 <body>
 
 <div class="container">
-    <h1>🎼 Editor Musicale Intelligente v5.0</h1>
+    <h1>🎼 Editor Musicale Intelligente v5.2</h1>
     
     <div class="instructions">
-        <strong>Nuove funzioni avanzate per il Doc:</strong><br>
-        • <strong>Linea curva (Legatura):</strong> Racchiudi le note tra tonde. Es: <code>( A4 | A2 )</code> per legare a cavallo di battuta.<br>
-        • <strong>Sbarre manuali:</strong> Racchiudi le note veloci tra quadre. Es: <code>[ E8 F8 ]</code> per unirle a scelta.<br>
-        • <strong>Note e Pause standard:</strong> Rimangono invariate (Es: <code>C4.</code> o <code>4r</code>). Spazio note basse ottimizzato!
+        <strong>PONTUARIO DI SCRITTURA RAPIDA (Separa ogni elemento con uno spazio):</strong>
+        <div class="ins-section">
+            🎵 <strong>Note Base:</strong> Lettera (A-G) + Durata (1, 2, 4, 8, 16). Es: <code>C4</code> (Do da un quarto), <code>E8</code> (Mi da un ottavo).<br>
+            #️⃣ <strong>Alterazioni:</strong> Aggiungi <code>d</code> per il diesis, <code>b</code> per il bemolle all'inizio. Es: <code>dF4</code> (Fa#), <code>bB8</code> (Sib).<br>
+            ↕️ <strong>Altezza/Ottave:</strong> Aggiungi da 1 a 3 segni più o meno alla fine. Es: <code>C4+++</code> (Acutissimo), <code>G2--</code> (Gravissimo).<br>
+            • <strong>Punto di Valore:</strong> Metti un punto dopo la durata. Es: <code>C4.</code> (Nota col punto), <code>4r.</code> (Pausa col punto).<br>
+            🤫 <strong>Pause:</strong> Durata + lettera 'r'. Es: <code>1r</code> (Intera), <code>2r</code> (Metà), <code>4r</code> (Quarto), <code>8r</code> (Ottavo), <code>16r</code>.<br>
+            🔗 <strong>Legature e Sbarre:</strong> <code>( A4 B4 )</code> per linea curva (anche tra battute <code>|</code>). <code>[ E8 F8 ]</code> per sbarre manuali.
+        </div>
     </div>
 
     <label for="music-input">Inserisci la tua musica qui sotto:</label>
@@ -81,19 +86,17 @@
     }
 
     function parseMusicText(text) {
-        // Tokenizzazione che preserva le parentesi attaccate o staccate dalle note
         const tokens = text.replace(/\(/g, ' ( ').replace(/\)/g, ' ) ').replace(/\[/g, ' [ ').replace(/\]/g, ' ] ').trim().split(/\s+/).filter(t => t.length > 0);
         
         const measures = [];
         let currentMeasure = [];
         
-        // Strutture temporanee per tracciare legature e sbarre manuali
         let openSlurIndex = null;
         let activeBeamGroup = null;
         
         let globalNoteCounter = 0;
-        const slursToCreate = []; // Array di oggetti {fromGlobalIndex, toGlobalIndex}
-        const beamGroupsToCreate = []; // Array di array di indici globali delle note
+        const slursToCreate = []; 
+        const beamGroupsToCreate = []; 
 
         const elementRegex = /^(([db])?([A-G])(\d+)(\.?)(([\+\-]{1,3})?))|((16|2|4|8|1)(r)(\.?))$/;
 
@@ -221,7 +224,6 @@
                 }
             }
 
-            // Mappa globale per ritrovare i riferimenti alle StaveNote create, utile per creare le legature curve
             const globalNoteMap = {};
 
             rows.forEach((rowData) => {
@@ -230,7 +232,6 @@
                 outputDiv.appendChild(rowDiv);
 
                 const renderer = new Renderer(rowDiv, Renderer.Backends.SVG);
-                // ALTEZZA PORTATA A 160 PER FAR VEDERE IL SOL GRAVE SENZA SCOMPAGINARE L'A4
                 renderer.resize(MAX_ROW_WIDTH, 160);
                 const context = renderer.getContext();
 
@@ -256,7 +257,6 @@
                         vexNotes.push(note);
                         globalNoteMap[data.globalIndex] = note;
 
-                        // Verifica se questa nota fa parte di un gruppo beam manuale
                         parsedData.beamGroupsToCreate.forEach((group, gIdx) => {
                             if (group.includes(data.globalIndex)) {
                                 if (!localBeamGroups[gIdx]) localBeamGroups[gIdx] = [];
@@ -268,17 +268,15 @@
                     if (vexNotes.length > 0) {
                         Vex.Flow.Formatter.FormatAndDraw(context, stave, vexNotes);
                         
-                        // Disegna le sbarre
                         if (parsedData.beamGroupsToCreate.length > 0) {
-                            // Se ci sono gruppi manuali, disegna solo quelli definiti dall'utente
                             localBeamGroups.forEach(notesGroup => {
                                 if (notesGroup && notesGroup.length > 1) {
+                                    notesGroup.forEach(n => { if(n.render_options) n.render_options.draw_stem_through_stave = false; });
                                     const b = new Beam(notesGroup);
                                     b.setContext(context).draw();
                                 }
                             });
                         } else {
-                            // Altrimenti mantiene l'automatismo intelligente di prima
                             try {
                                 const autoBeams = Beam.generateBeams(vexNotes, { filter_rests: true });
                                 autoBeams.forEach(b => b.setContext(context).draw());
@@ -289,16 +287,14 @@
                     currentX += singleStaveWidth;
                 });
 
-                // Disegna le curve (Legature di valore/portamento)
                 parsedData.slursToCreate.forEach(slur => {
                     const fromNote = globalNoteMap[slur.from];
                     const toNote = globalNoteMap[slur.to];
                     
-                    // Disegna la curva solo se entrambe le note sono visibili/esistono
                     if (fromNote && toNote) {
                         const curve = new Curve(fromNote, toNote, {
                             thickness: 2,
-                            cps: [{ x: 0, y: 10 }, { x: 0, y: 10 }]
+                            cps: [{ x: 0, y: 15 }, { x: 0, y: 15 }]
                         });
                         curve.setContext(context).draw();
                     }
