@@ -13,7 +13,7 @@
         .instructions { background-color: #eef2f7; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; line-height: 1.5; }
         .instructions code { background: #fff; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-weight: bold; border: 1px solid #dcdcdc; }
         label { font-weight: bold; display: block; margin-bottom: 8px; color: #34495e; }
-        textarea { width: 100%; height: 120px; padding: 12px; font-family: 'Courier New', Courier, monospace; font-size: 16px; border: 2px solid #bdc3c7; border-radius: 6px; resize: vertical; }
+        textarea { width: 100%; height: 140px; padding: 12px; font-family: 'Courier New', Courier, monospace; font-size: 16px; border: 2px solid #bdc3c7; border-radius: 6px; resize: vertical; }
         textarea:focus { border-color: #3498db; outline: none; }
         .error-message { color: #e74c3c; margin-top: 5px; font-size: 14px; min-height: 20px; }
         
@@ -22,7 +22,8 @@
         .btn.active { background-color: #3498db; border-color: #2980b9; color: white; }
         
         #output-container { margin-top: 20px; background: #fff; padding: 10px; display: flex; flex-direction: column; align-items: center; width: 100%; }
-        .system-row { margin-bottom: 15px; width: 740px; }
+        /* Altezza rigo bilanciata per note gravi e compattezza */
+        .system-row { margin-bottom: 20px; width: 740px; }
         footer { margin-top: 30px; text-align: center; font-size: 12px; color: #7f8c8d; }
 
         @media print {
@@ -30,25 +31,24 @@
             .container { box-shadow: none; padding: 0; max-width: 100%; }
             h1, .instructions, label, textarea, .error-message, .layout-controls, footer { display: none !important; }
             #output-container { border: none; margin-top: 0; padding: 0; }
-            .system-row { page-break-inside: avoid; margin-bottom: 25px; }
+            .system-row { page-break-inside: avoid; margin-bottom: 35px; }
         }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>🎼 Editor Musicale Intelligente v4.0</h1>
+    <h1>🎼 Editor Musicale Intelligente v5.0</h1>
     
     <div class="instructions">
-        <strong>Scrittura rapida per il Doc:</strong> Separa gli elementi con uno spazio.<br>
-        • <strong>Note:</strong> <code>[alterazione][Nota][durata][.][ottava]</code> (Es: <code>C4</code>, con punto: <code>C4.</code>)<br>
-        • <strong>Pause:</strong> <code>[durata]r[.]</code> (Es: <code>4r</code> = pausa da un quarto, <code>2r.</code> = pausa da metà col punto)<br>
-        • <strong>Limiti:</strong> Massimo 3 segni ottava (<code>+++</code> / <code>---</code>). Unione note veloci automatica.<br>
-        • 🖨️ <strong>Stampa:</strong> Premi <code>Cmd + P</code> per stampare o salvare in PDF.
+        <strong>Nuove funzioni avanzate per il Doc:</strong><br>
+        • <strong>Linea curva (Legatura):</strong> Racchiudi le note tra tonde. Es: <code>( A4 | A2 )</code> per legare a cavallo di battuta.<br>
+        • <strong>Sbarre manuali:</strong> Racchiudi le note veloci tra quadre. Es: <code>[ E8 F8 ]</code> per unirle a scelta.<br>
+        • <strong>Note e Pause standard:</strong> Rimangono invariate (Es: <code>C4.</code> o <code>4r</code>). Spazio note basse ottimizzato!
     </div>
 
     <label for="music-input">Inserisci la tua musica qui sotto:</label>
-    <textarea id="music-input" placeholder="Es: C4 D4 E4 F4 | G4 A4 B4">C4. D8 E4 4r | dC8 D8 E8 F8 bB4 4r | C4++ 2r. | C4 D4 4r. F8</textarea>
+    <textarea id="music-input" placeholder="Es: C4 D4 E4 F4 | G4 A4 B4">E2 F8 E8 D8 C8 | A2 G2 | 4r F8 E8 D4 E8 F8 | E4 D4 B4- A4- | G2- E8 D8 | G2- E8 F8 | G2 C8 C8 D8 C8 | G4 G4 C2 | F4 E4 D4 C4 | ( D1 | 4r ) [ C8+ C8+ ] A8 C8+ 8r D8+ | D8+ D8+ D8+ B8 D8+ 8r E8+ | E4+ E8+ E8+ C8+ E8+ F8+ | F8+ F8+ F8+ E8+ F8+ G8+ | G8+ E8+ G8+ B4+ bB4+ | E4+ C4+ D4+ | 4r F8+ E8+ C4+ C4+ | D1+</textarea>
     <div id="error-log" class="error-message"></div>
 
     <div class="layout-controls">
@@ -63,7 +63,7 @@
 <footer>Fatto con ❤️ per il Maestro</footer>
 
 <script>
-    const { Renderer, Stave, StaveNote, Accidental, Beam, Dot } = Vex.Flow;
+    const { Renderer, Stave, StaveNote, Accidental, Beam, Dot, Curve } = Vex.Flow;
     const inputElement = document.getElementById('music-input');
     const errorElement = document.getElementById('error-log');
     const outputDiv = document.getElementById('output-container');
@@ -81,15 +81,47 @@
     }
 
     function parseMusicText(text) {
-        const tokens = text.trim().split(/\s+/).filter(t => t.length > 0);
+        // Tokenizzazione che preserva le parentesi attaccate o staccate dalle note
+        const tokens = text.replace(/\(/g, ' ( ').replace(/\)/g, ' ) ').replace(/\[/g, ' [ ').replace(/\]/g, ' ] ').trim().split(/\s+/).filter(t => t.length > 0);
+        
         const measures = [];
         let currentMeasure = [];
         
-        // Regex aggiornata per supportare il punto (.) sia su note che su pause
+        // Strutture temporanee per tracciare legature e sbarre manuali
+        let openSlurIndex = null;
+        let activeBeamGroup = null;
+        
+        let globalNoteCounter = 0;
+        const slursToCreate = []; // Array di oggetti {fromGlobalIndex, toGlobalIndex}
+        const beamGroupsToCreate = []; // Array di array di indici globali delle note
+
         const elementRegex = /^(([db])?([A-G])(\d+)(\.?)(([\+\-]{1,3})?))|((16|2|4|8|1)(r)(\.?))$/;
 
         for (let i = 0; i < tokens.length; i++) {
             const token = tokens[i];
+
+            if (token === '(') {
+                openSlurIndex = globalNoteCounter; 
+                continue;
+            }
+            if (token === ')') {
+                if (openSlurIndex !== null && globalNoteCounter > openSlurIndex) {
+                    slursToCreate.push({ from: openSlurIndex, to: globalNoteCounter - 1 });
+                }
+                openSlurIndex = null;
+                continue;
+            }
+            if (token === '[') {
+                activeBeamGroup = [];
+                continue;
+            }
+            if (token === ']') {
+                if (activeBeamGroup && activeBeamGroup.length > 1) {
+                    beamGroupsToCreate.push(activeBeamGroup);
+                }
+                activeBeamGroup = null;
+                continue;
+            }
 
             if (token === '|') {
                 if (currentMeasure.length > 0) {
@@ -100,21 +132,18 @@
             }
 
             const match = token.match(elementRegex);
-            if (!match) throw new Error(`Elemento non valido o limite superato: "${token}"`);
+            if (!match) throw new Error(`Elemento non valido: "${token}"`);
+
+            let noteObj = { globalIndex: globalNoteCounter };
 
             if (match[10] === 'r') {
-                // Gestione PAUSA
                 const duration = match[9];
                 const hasDot = match[11] === '.';
-                
-                currentMeasure.push({
-                    isRest: true,
-                    keys: ["b/4"], // Vexflow mette le pause standard sulla linea centrale
-                    duration: duration + "r",
-                    hasDot: hasDot
-                });
+                noteObj.isRest = true;
+                noteObj.keys = ["b/4"];
+                noteObj.duration = duration + "r";
+                noteObj.hasDot = hasDot;
             } else {
-                // Gestione NOTA
                 const alt = match[2] || "";       
                 const noteLetter = match[3];     
                 const duration = match[4];       
@@ -130,21 +159,26 @@
                 if (alt === 'd') accidentalType = '#';
                 if (alt === 'b') accidentalType = 'b';
 
-                currentMeasure.push({
-                    isRest: false,
-                    keys: [key],
-                    duration: duration,
-                    accidental: accidentalType,
-                    hasDot: hasDot
-                });
+                noteObj.isRest = false;
+                noteObj.keys = [key];
+                noteObj.duration = duration;
+                noteObj.accidental = accidentalType;
+                noteObj.hasDot = hasDot;
+
+                if (activeBeamGroup !== null) {
+                    activeBeamGroup.push(globalNoteCounter);
+                }
             }
+
+            currentMeasure.push(noteObj);
+            globalNoteCounter++;
         }
         
         if (currentMeasure.length > 0) {
             measures.push(currentMeasure);
         }
         
-        return measures;
+        return { measures, slursToCreate, beamGroupsToCreate };
     }
 
     function renderScore() {
@@ -154,7 +188,8 @@
         if (!inputText.trim()) return;
 
         try {
-            const measuresData = parseMusicText(inputText);
+            const parsedData = parseMusicText(inputText);
+            const measuresData = parsedData.measures;
             if (measuresData.length === 0) return;
             
             const rows = [];
@@ -186,13 +221,17 @@
                 }
             }
 
+            // Mappa globale per ritrovare i riferimenti alle StaveNote create, utile per creare le legature curve
+            const globalNoteMap = {};
+
             rows.forEach((rowData) => {
                 const rowDiv = document.createElement('div');
                 rowDiv.className = 'system-row';
                 outputDiv.appendChild(rowDiv);
 
                 const renderer = new Renderer(rowDiv, Renderer.Backends.SVG);
-                renderer.resize(MAX_ROW_WIDTH, 130);
+                // ALTEZZA PORTATA A 160 PER FAR VEDERE IL SOL GRAVE SENZA SCOMPAGINARE L'A4
+                renderer.resize(MAX_ROW_WIDTH, 160);
                 const context = renderer.getContext();
 
                 const numMeasuresInRow = rowData.measures.length;
@@ -202,42 +241,67 @@
                 let currentX = STAVE_START_X;
 
                 rowData.measures.forEach((measureNotes, index) => {
-                    const stave = new Stave(currentX, 35, singleStaveWidth);
-                    
-                    if (index === 0) {
-                        stave.addClef("treble");
-                    }
-                    
+                    const stave = new Stave(currentX, 40, singleStaveWidth);
+                    if (index === 0) stave.addClef("treble");
                     stave.setContext(context).draw();
 
                     const vexNotes = [];
+                    const localBeamGroups = [];
+
                     measureNotes.forEach(data => {
                         const note = new StaveNote({ keys: data.keys, duration: data.duration });
-                        
-                        if (data.accidental) {
-                            note.addModifier(new Accidental(data.accidental));
-                        }
-                        if (data.hasDot) {
-                            Dot.buildAndAttach([note], { all: true });
-                        }
+                        if (data.accidental) note.addModifier(new Accidental(data.accidental));
+                        if (data.hasDot) Dot.buildAndAttach([note], { all: true });
                         
                         vexNotes.push(note);
+                        globalNoteMap[data.globalIndex] = note;
+
+                        // Verifica se questa nota fa parte di un gruppo beam manuale
+                        parsedData.beamGroupsToCreate.forEach((group, gIdx) => {
+                            if (group.includes(data.globalIndex)) {
+                                if (!localBeamGroups[gIdx]) localBeamGroups[gIdx] = [];
+                                localBeamGroups[gIdx].push(note);
+                            }
+                        });
                     });
 
                     if (vexNotes.length > 0) {
-                        let beams = [];
-                        try {
-                            // Genera le barre d'unione escludendo le pause dal raggruppamento ritmico grafico
-                            beams = Beam.generateBeams(vexNotes, {
-                                filter_rests: true
-                            });
-                        } catch(e) {}
-
                         Vex.Flow.Formatter.FormatAndDraw(context, stave, vexNotes);
-                        beams.forEach(b => b.setContext(context).draw());
+                        
+                        // Disegna le sbarre
+                        if (parsedData.beamGroupsToCreate.length > 0) {
+                            // Se ci sono gruppi manuali, disegna solo quelli definiti dall'utente
+                            localBeamGroups.forEach(notesGroup => {
+                                if (notesGroup && notesGroup.length > 1) {
+                                    const b = new Beam(notesGroup);
+                                    b.setContext(context).draw();
+                                }
+                            });
+                        } else {
+                            // Altrimenti mantiene l'automatismo intelligente di prima
+                            try {
+                                const autoBeams = Beam.generateBeams(vexNotes, { filter_rests: true });
+                                autoBeams.forEach(b => b.setContext(context).draw());
+                            } catch(e) {}
+                        }
                     }
 
                     currentX += singleStaveWidth;
+                });
+
+                // Disegna le curve (Legature di valore/portamento)
+                parsedData.slursToCreate.forEach(slur => {
+                    const fromNote = globalNoteMap[slur.from];
+                    const toNote = globalNoteMap[slur.to];
+                    
+                    // Disegna la curva solo se entrambe le note sono visibili/esistono
+                    if (fromNote && toNote) {
+                        const curve = new Curve(fromNote, toNote, {
+                            thickness: 2,
+                            cps: [{ x: 0, y: 10 }, { x: 0, y: 10 }]
+                        });
+                        curve.setContext(context).draw();
+                    }
                 });
             });
 
