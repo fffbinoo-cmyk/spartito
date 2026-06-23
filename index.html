@@ -38,17 +38,17 @@
 <body>
 
 <div class="container">
-    <h1>🎼 Editor Musicale Intelligente v5.3</h1>
+    <h1>🎼 Editor Musicale Intelligente v5.4</h1>
     
     <div class="instructions">
         <strong>PONTUARIO DI SCRITTURA RAPIDA (Separa ogni elemento con uno spazio):</strong>
         <div class="ins-section">
-            🎵 <strong>Note Base:</strong> Lettera (A-G) + Durata (1, 2, 4, 8, 16). Es: <code>C4</code> (Do da un quarto), <code>E8</code> (Mi da un ottavo).<br>
-            #️⃣ <strong>Alterazioni:</strong> Aggiungi <code>d</code> per il diesis, <code>b</code> per il bemolle all'inizio. Es: <code>dF4</code> (Fa#), <code>bB8</code> (Sib).<br>
-            ↕️ <strong>Altezza/Ottave:</strong> Aggiungi da 1 a 3 segni più o meno alla fine. Es: <code>C4+++</code> (Acutissimo), <code>G2--</code> (Gravissimo).<br>
-            • <strong>Punto di Valore:</strong> Metti un punto dopo la durata. Es: <code>C4.</code> (Nota col punto), <code>4r.</code> (Pausa col punto).<br>
-            🤫 <strong>Pause:</strong> Durata + lettera 'r'. Es: <code>1r</code> (Intera), <code>2r</code> (Metà), <code>4r</code> (Quarto), <code>8r</code> (Ottavo), <code>16r</code>.<br>
-            🔗 <strong>Legature e Sbarre:</strong> <code>( A4 B4 )</code> per linea curva (anche tra battute <code>|</code>). <code>[ E8 F8 ]</code> per sbarre manuale pulite.
+            🎵 <strong>Note Base:</strong> Lettera (A-G) + Durata (1, 2, 4, 8, 16). Es: <code>C4</code>, <code>E8</code>.<br>
+            #️⃣ <strong>Alterazioni:</strong> Aggiungi <code>d</code> per il diesis, <code>b` per il bemolle. Es: <code>dF4</code>, <code>bB8</code>.<br>
+            ↕️ <strong>Altezza/Ottave:</strong> Da 1 a 3 segni più o meno alla fine. Es: <code>C4+++</code>, <code>G2--</code>.<br>
+            • <strong>Punto di Valore:</strong> Metti un punto dopo la durata. Es: <code>C4.</code>, <code>4r.</code>.<br>
+            🤫 <strong>Pause:</strong> Durata + lettera 'r'. Es: <code>4r</code> (quarto), <code>8r</code> (ottavo).<br>
+            🔗 <strong>Legature e Sbarre:</strong> <code>( A4 B4 )</code> per linea curva controllata. <code>[ E8 F8 ]</code> per sbarre manuali pulite.
         </div>
     </div>
 
@@ -224,8 +224,7 @@
                 }
             }
 
-            const globalNoteMap = {};
-
+            // Elaborazione rigo per rigo
             rows.forEach((rowData) => {
                 const rowDiv = document.createElement('div');
                 rowDiv.className = 'system-row';
@@ -240,6 +239,7 @@
                 const singleStaveWidth = (MAX_ROW_WIDTH - 20) / divisor;
 
                 let currentX = STAVE_START_X;
+                const localNoteMap = {}; // Mappa le note solo per l'istanza di QUESTO rigo corrente
 
                 rowData.measures.forEach((measureNotes, index) => {
                     const stave = new Stave(currentX, 40, singleStaveWidth);
@@ -254,18 +254,16 @@
                         if (data.accidental) note.addModifier(new Accidental(data.accidental));
                         if (data.hasDot) Dot.buildAndAttach([note], { all: true });
                         
-                        // IDENTIFICAZIONE INTEGRATA: Se la nota appartiene a un gruppo beam manuale, distruggiamo la funzione drawFlag
                         parsedData.beamGroupsToCreate.forEach((group, gIdx) => {
                             if (group.includes(data.globalIndex)) {
                                 if (!localBeamGroups[gIdx]) localBeamGroups[gIdx] = [];
                                 localBeamGroups[gIdx].push(note);
-                                // Patch di basso livello: inibisce il rendering grafico della codina singola
                                 note.drawFlag = function() {}; 
                             }
                         });
 
                         vexNotes.push(note);
-                        globalNoteMap[data.globalIndex] = note;
+                        localNoteMap[data.globalIndex] = note; // Salva il riferimento locale al rigo
                     });
 
                     if (vexNotes.length > 0) {
@@ -289,9 +287,10 @@
                     currentX += singleStaveWidth;
                 });
 
+                // CORREZIONE FONDAMENTALE: Disegna le curve SOLO se entrambe le note appartengono a questo specifico rigo operativo
                 parsedData.slursToCreate.forEach(slur => {
-                    const fromNote = globalNoteMap[slur.from];
-                    const toNote = globalNoteMap[slur.to];
+                    const fromNote = localNoteMap[slur.from];
+                    const toNote = localNoteMap[slur.to];
                     
                     if (fromNote && toNote) {
                         const curve = new Curve(fromNote, toNote, {
